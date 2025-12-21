@@ -1,0 +1,74 @@
+{
+  "timeZone": "America/Argentina/Buenos_Aires",
+  "schedules": [
+    {
+      "name": "madrugada",
+      "start": "01:00",
+      "end": "06:00",
+      "folder": "music/madrugada/",
+      "displayName": "Madrugada txt"
+    },
+    {
+      "name": "mañana",
+      "start": "06:00",
+      "end": "12:00",
+      "folder": "music/mañana/",
+      "displayName": "Telesoft"
+    },
+    {
+      "name": "tarde",
+      "start": "12:00",
+      "end": "16:00",
+      "folder": "music/tarde/",
+      "displayName": "Radio 404"
+    },
+    {
+      "name": "mediatarde",
+      "start": "16:00",
+      "end": "20:00",
+      "folder": "music/mediatarde/",
+      "displayName": "Floppy Disk"
+    },
+    {
+      "name": "noche",
+      "start": "20:00",
+      "end": "01:00",
+      "folder": "music/noche/",
+      "displayName": "Piratas Informaticos"
+    }
+  ],
+  "specialSchedules": [
+    {
+      "days": [5],
+      "name": "viernes_20_22",
+      "start": "20:00",
+      "end": "22:00",
+      "folder": "music/especiales/viernes_20_22/",
+      "displayName": "Trasnoche Teletext"
+    },
+    {
+      "days": [5],
+      "name": "viernes_22_01",
+      "start": "22:00",
+      "end": "01:00",
+      "folder": "music/especiales/viernes_22_01/",
+      "displayName": "Trasnoche Teletext"
+    },
+    {
+      "days": [6],
+      "name": "sabado_20_22",
+      "start": "20:00",
+      "end": "22:00",
+      "folder": "music/especiales/sabado_20_22/",
+      "displayName": "Trasnoche Teletext"
+    },
+    {
+      "days": [6],
+      "name": "sabado_22_01",
+      "start": "22:00",
+      "end": "01:00",
+      "folder": "music/especiales/sabado_22_01/",
+      "displayName": "Trasnoche Teletext"
+    }
+  ]
+}
