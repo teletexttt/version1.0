@@ -1,0 +1,18 @@
+{
+  "tracks": [
+    {
+      "file": "eyecontact.mp3",
+      "duration": 300
+    },
+    {
+      "file": "ingridschroederpaint.mp3",
+      "duration": 300
+    },
+    {
+      "file": "jazzcartel.mp3",
+      "duration": 300
+    }
+  ],
+  "total_duration": 900,
+  "total_tracks": 3
+}
