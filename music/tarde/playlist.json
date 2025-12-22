@@ -1,1 +1,10 @@
-{"tracks":[{"file":"andresnewforu.mp3","duration":300}],"total_duration":300,"total_tracks":1}
+{
+  "tracks": [
+    {
+      "file": "andresnewforu.mp3",
+      "duration": 345
+    }
+  ],
+  "total_duration": 345,
+  "total_tracks": 1
+}
