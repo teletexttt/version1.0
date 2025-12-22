@@ -70,7 +70,7 @@ def main():
     # Definir estructura de carpetas
     music_folders = [
         "music/madrugada",
-        "music/mañana", 
+        "music/manana", 
         "music/tarde",
         "music/mediatarde",
         "music/noche",
