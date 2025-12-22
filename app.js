@@ -1,11 +1,10 @@
-// TELEtext RADIO - Sistema de SIMULACIÓN EN VIVO (Modo Demostración)
-// Archivo: app.js
-// Modo: Simulación sin reproducción de audio real
+// TELEtext RADIO - Sistema de Radio en Vivo Simulado
+// Archivo: app.js (VERSIÓN CORREGIDA - Audio Real)
 
-console.log('📻 Teletext Radio - Modo SIMULACIÓN inicializando...');
+console.log('📻 Teletext Radio - Inicializando...');
 
 // ===== ELEMENTOS DEL DOM =====
-const audio = document.getElementById('radioPlayer');
+const audioPlayer = document.getElementById('radioPlayer');
 const playButton = document.getElementById('radioPlayButton');
 const shareButton = document.getElementById('shareRadioButton');
 const playPath = document.getElementById('playPath');
@@ -18,23 +17,10 @@ const currentTimeRange = document.getElementById('currentTimeRange');
 // ===== VARIABLES DE ESTADO =====
 let isPlaying = false;
 let currentPlaylist = [];
+let currentTrackIndex = 0;
 let currentSchedule = null;
-let nextTrackTimeout = null;
-let isAudioLoading = false;
 
-// ===== DATOS DE HORARIOS =====
-const programNames = {
-    "madrugada": "Madrugada txt",
-    "mañana": "Telesoft", 
-    "tarde": "Radio 404",
-    "mediatarde": "Floppy Disk",
-    "noche": "Piratas Informaticos",
-    "viernes_20_22": "Trasnoche Teletext",
-    "viernes_22_01": "Trasnoche Teletext",
-    "sabado_20_22": "Trasnoche Teletext",
-    "sabado_22_01": "Trasnoche Teletext"
-};
-
+// ===== CONFIGURACIÓN DE HORARIOS (RUTAS CORREGIDAS) =====
 const scheduleConfig = {
     "timeZone": "America/Argentina/Buenos_Aires",
     "schedules": [
@@ -43,15 +29,15 @@ const scheduleConfig = {
             "displayName": "Madrugada txt",
             "start": "01:00",
             "end": "06:00",
-            "folder": "madrugada/",
+            "folder": "music/madrugada/",
             "startHour": 1
         },
         {
-            "name": "mañana",
+            "name": "manana",      // CORREGIDO: Sin 'ñ'
             "displayName": "Telesoft",
             "start": "06:00",
             "end": "12:00",
-            "folder": "mañana/",
+            "folder": "music/manana/", // CORREGIDO: Sin 'ñ'
             "startHour": 6
         },
         {
@@ -59,7 +45,7 @@ const scheduleConfig = {
             "displayName": "Radio 404",
             "start": "12:00",
             "end": "16:00",
-            "folder": "tarde/",
+            "folder": "music/tarde/",
             "startHour": 12
         },
         {
@@ -67,7 +53,7 @@ const scheduleConfig = {
             "displayName": "Floppy Disk",
             "start": "16:00",
             "end": "20:00",
-            "folder": "mediatarde/",
+            "folder": "music/mediatarde/",
             "startHour": 16
         },
         {
@@ -75,7 +61,7 @@ const scheduleConfig = {
             "displayName": "Piratas Informaticos",
             "start": "20:00",
             "end": "01:00",
-            "folder": "noche/",
+            "folder": "music/noche/",
             "startHour": 20
         }
     ],
@@ -86,7 +72,7 @@ const scheduleConfig = {
             "displayName": "Trasnoche Teletext",
             "start": "20:00",
             "end": "22:00",
-            "folder": "especiales/viernes_20_22/",
+            "folder": "music/especiales/viernes_20_22/",
             "startHour": 20
         },
         {
@@ -95,7 +81,7 @@ const scheduleConfig = {
             "displayName": "Trasnoche Teletext",
             "start": "22:00",
             "end": "01:00",
-            "folder": "especiales/viernes_22_01/",
+            "folder": "music/especiales/viernes_22_01/",
             "startHour": 22
         },
         {
@@ -104,7 +90,7 @@ const scheduleConfig = {
             "displayName": "Trasnoche Teletext",
             "start": "20:00",
             "end": "22:00",
-            "folder": "especiales/sabado_20_22/",
+            "folder": "music/especiales/sabado_20_22/",
             "startHour": 20
         },
         {
@@ -113,7 +99,7 @@ const scheduleConfig = {
             "displayName": "Trasnoche Teletext",
             "start": "22:00",
             "end": "01:00",
-            "folder": "especiales/sabado_22_01/",
+            "folder": "music/especiales/sabado_22_01/",
             "startHour": 22
         }
     ]
@@ -142,6 +128,7 @@ function getCurrentSchedule() {
     const currentMinute = now.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     
+    // Primero verificar horarios especiales (viernes y sábado)
     if (currentDay === 5 || currentDay === 6) {
         for (const special of scheduleConfig.specialSchedules) {
             if (special.days.includes(currentDay)) {
@@ -163,6 +150,7 @@ function getCurrentSchedule() {
         }
     }
     
+    // Si no es horario especial, usar horarios regulares
     for (const regular of scheduleConfig.schedules) {
         const startTime = parseInt(regular.start.split(':')[0]) * 60 + parseInt(regular.start.split(':')[1]);
         let endTime = parseInt(regular.end.split(':')[0]) * 60 + parseInt(regular.end.split(':')[1]);
@@ -183,180 +171,84 @@ function getCurrentSchedule() {
     return scheduleConfig.schedules[0];
 }
 
-function getSecondsIntoCurrentBlock(schedule) {
-    const now = getArgentinaTime();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentSecond = now.getSeconds();
-    
-    const currentTotalSeconds = (currentHour * 3600) + (currentMinute * 60) + currentSecond;
-    const startTotalSeconds = schedule.startHour * 3600;
-    
-    let secondsIntoBlock;
-    if (schedule.startHour > currentHour && schedule.startHour >= 20) {
-        secondsIntoBlock = currentTotalSeconds + (24 * 3600) - startTotalSeconds;
-    } else {
-        secondsIntoBlock = currentTotalSeconds - startTotalSeconds;
-    }
-    
-    return Math.max(0, secondsIntoBlock);
-}
-
-function calculateLiveStartPosition() {
-    if (currentPlaylist.length === 0) {
-        return { trackIndex: 0, startSeconds: 0 };
-    }
-    
-    const secondsIntoBlock = getSecondsIntoCurrentBlock(currentSchedule);
-    console.log(`⏱️ Segundos en bloque: ${secondsIntoBlock}s`);
-    
-    let totalDuration = 0;
-    for (const track of currentPlaylist) {
-        totalDuration += track.duration || 300;
-    }
-    
-    if (totalDuration === 0) {
-        return { trackIndex: 0, startSeconds: 0 };
-    }
-    
-    const cyclicPosition = secondsIntoBlock % totalDuration;
-    console.log(`🎯 Posición en lista: ${cyclicPosition}s/${totalDuration}s`);
-    
-    let accumulatedTime = 0;
-    for (let i = 0; i < currentPlaylist.length; i++) {
-        const trackDuration = currentPlaylist[i].duration || 300;
-        
-        if (cyclicPosition < accumulatedTime + trackDuration) {
-            const startSeconds = cyclicPosition - accumulatedTime;
-            console.log(`🎵 Canción ${i+1}: inicio en segundo ${Math.round(startSeconds)}`);
-            return { trackIndex: i, startSeconds: startSeconds };
-        }
-        accumulatedTime += trackDuration;
-    }
-    
-    return { trackIndex: 0, startSeconds: 0 };
-}
-
-// ===== CARGA DE PLAYLIST (MODIFICADA) =====
+// ===== FUNCIONES DE REPRODUCCIÓN DE AUDIO REAL =====
 async function loadCurrentPlaylist() {
     currentSchedule = getCurrentSchedule();
     
     try {
-        const response = await fetch(`${currentSchedule.folder}playlist.json`);
+        const response = await fetch(currentSchedule.folder + 'playlist.json');
+        if (!response.ok) throw new Error('No se encontró playlist.json');
         
-        if (response.ok) {
-            const data = await response.json();
-            
-            if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-                currentPlaylist = data.tracks;
-                console.log(`✅ Playlist cargada: ${currentPlaylist.length} canciones`);
-                return true;
-            }
+        const data = await response.json();
+        currentPlaylist = data.tracks || [];
+        
+        if (currentPlaylist.length === 0) {
+            // Playlist vacía: usar fallback
+            console.log('ℹ️ Playlist vacía, usando canción de fallback');
+            currentPlaylist = [{file: "fallback.mp3", duration: 300}];
         }
-        
-        // FALLBACK DE SIMULACIÓN (usa el primer archivo disponible)
-        currentPlaylist = [{file: "automatnematod.mp3", duration: 300}];
-        console.log('⚠️ Usando playlist de simulación');
-        return false;
-        
     } catch (error) {
-        console.log('ℹ️ Error cargando playlist (simulación activada):', error.message);
-        currentPlaylist = [{file: "automatnematod.mp3", duration: 300}];
-        return false;
+        console.log('⚠️ Error cargando playlist:', error.message);
+        // Fallback robusto si no hay playlist
+        currentPlaylist = [{file: "fallback.mp3", duration: 300}];
     }
+    
+    console.log(`✅ Playlist cargada para: ${currentSchedule.displayName}`);
 }
 
-// ===== CONTROL DE SIMULACIÓN (SIN AUDIO REAL) =====
-function playLiveSimulation() {
-    if (currentPlaylist.length === 0 || isAudioLoading) {
-        console.log('⏸️ Simulación: No hay canciones o ya está cargando');
+function playCurrentTrack() {
+    if (currentPlaylist.length === 0) {
+        console.log('⏸️ No hay canciones en la playlist');
         return;
     }
     
-    isAudioLoading = true;
+    const track = currentPlaylist[currentTrackIndex];
+    const audioPath = currentSchedule.folder + track.file;
     
-    const { trackIndex, startSeconds } = calculateLiveStartPosition();
-    const track = currentPlaylist[trackIndex];
+    console.log(`🎵 Intentando reproducir: ${audioPath}`);
     
-    console.log(`🎧 SIMULACIÓN EN VIVO: "${track.file}" (seg. ${Math.round(startSeconds)})`);
+    // Detener reproducción anterior y establecer nueva fuente
+    audioPlayer.pause();
+    audioPlayer.src = audioPath;
+    audioPlayer.volume = 0.8;
     
-    // SIMULACIÓN DE CARGA Y REPRODUCCIÓN
-    setTimeout(() => {
-        isPlaying = true;
-        isAudioLoading = false;
-        updatePlayButton();
-        updateDisplayInfo();
-        console.log("✅ Simulación EN VIVO activada");
-        scheduleNextTrack(track.duration || 300, startSeconds);
-    }, 800);
-}
-
-function scheduleNextTrack(trackDuration, startSeconds) {
-    if (nextTrackTimeout) {
-        clearTimeout(nextTrackTimeout);
+    // Intentar reproducir
+    const playPromise = audioPlayer.play();
+    
+    if (playPromise !== undefined) {
+        playPromise.then(() => {
+            isPlaying = true;
+            updatePlayButton();
+            console.log("✅ Reproducción iniciada correctamente");
+        }).catch(error => {
+            console.error('❌ Error al reproducir:', error);
+            // Intentar siguiente canción si falla
+            setTimeout(playNextTrack, 2000);
+        });
     }
-    
-    const timeUntilNextTrack = (trackDuration - startSeconds) * 1000;
-    console.log(`⏳ Siguiente canción en: ${Math.round(timeUntilNextTrack/1000)}s`);
-    
-    nextTrackTimeout = setTimeout(() => {
-        if (isPlaying) {
-            playNextTrack();
-        }
-    }, timeUntilNextTrack);
 }
 
 function playNextTrack() {
-    if (currentPlaylist.length === 0 || isAudioLoading) {
-        console.log('⏸️ Simulación: No hay canciones para continuar');
-        return;
-    }
+    if (currentPlaylist.length === 0) return;
     
-    isAudioLoading = true;
-    
-    // Encontrar índice actual (simulado)
-    let currentTrackIndex = 0;
-    if (currentPlaylist.length > 1) {
-        currentTrackIndex = (currentTrackIndex + 1) % currentPlaylist.length;
-    }
-    
-    const nextIndex = (currentTrackIndex + 1) % currentPlaylist.length;
-    const track = currentPlaylist[nextIndex];
-    
-    console.log(`⏭️ SIMULACIÓN: Siguiente canción -> "${track.file}"`);
-    
-    // SIMULACIÓN DE CARGA DE SIGUIENTE CANCIÓN
-    setTimeout(() => {
-        isAudioLoading = false;
-        console.log(`✅ Simulación siguiente activada`);
-        scheduleNextTrack(track.duration || 300, 0);
-    }, 800);
+    currentTrackIndex = (currentTrackIndex + 1) % currentPlaylist.length;
+    playCurrentTrack();
 }
 
 function togglePlay() {
-    if (isPlaying) {
-        // Pausar simulación
-        isPlaying = false;
-        updatePlayButton();
-        updateDisplayInfo();
-        
-        if (nextTrackTimeout) {
-            clearTimeout(nextTrackTimeout);
-            nextTrackTimeout = null;
-        }
-        
-        console.log('⏸️ Simulación pausada por usuario');
-    } else {
-        // Iniciar simulación
+    if (!isPlaying) {
+        // Si es la primera vez, cargar playlist y empezar
         if (currentPlaylist.length === 0) {
             loadCurrentPlaylist().then(() => {
-                if (currentPlaylist.length > 0) {
-                    playLiveSimulation();
-                }
+                playCurrentTrack();
             });
         } else {
-            playLiveSimulation();
+            playCurrentTrack();
         }
+    } else {
+        audioPlayer.pause();
+        isPlaying = false;
+        updatePlayButton();
     }
 }
 
@@ -366,7 +258,7 @@ function updateDisplayInfo() {
         currentSchedule = getCurrentSchedule();
     }
     
-    const displayName = currentSchedule.displayName || programNames[currentSchedule.name] || currentSchedule.name;
+    const displayName = currentSchedule.displayName;
     
     if (currentShow) {
         currentShow.textContent = isPlaying ? '🔴 EN VIVO' : displayName;
@@ -422,9 +314,9 @@ function shareRadio() {
     }
 }
 
-// ===== INICIALIZACIÓN (SIN EVENTOS DE ERROR) =====
+// ===== INICIALIZACIÓN =====
 function init() {
-    console.log('🎯 Iniciando sistema de SIMULACIÓN...');
+    console.log('🎯 Iniciando sistema de radio...');
     
     // Configurar controles
     if (playButton) {
@@ -435,100 +327,41 @@ function init() {
         shareButton.addEventListener('click', shareRadio);
     }
     
-    // Configurar audio solo para simulación
-    if (audio) {
-        audio.volume = 0;
-        // SOLO estos event listeners para simulación visual
-        audio.addEventListener('play', () => {
-            console.log('▶️ Evento de simulación: play');
-        });
-        
-        audio.addEventListener('pause', () => {
-            console.log('⏸️ Evento de simulación: pause');
+    // Configurar eventos del reproductor de audio
+    if (audioPlayer) {
+        audioPlayer.addEventListener('ended', playNextTrack);
+        audioPlayer.addEventListener('error', function(e) {
+            console.error('❌ Error en el elemento de audio:', e);
+            setTimeout(playNextTrack, 3000);
         });
     }
     
-    // Cargar playlist inicial y configurar actualizaciones
+    // Cargar playlist inicial y mostrar información
     loadCurrentPlaylist().then(() => {
         updateDisplayInfo();
-        
-        // Verificar cambios de horario cada minuto
-        setInterval(() => {
-            const oldScheduleName = currentSchedule ? currentSchedule.name : null;
-            currentSchedule = getCurrentSchedule();
-            
-            if (oldScheduleName !== currentSchedule.name) {
-                console.log(`🔄 Cambio de horario simulado: ${oldScheduleName} → ${currentSchedule.name}`);
-                updateDisplayInfo();
-                
-                if (isPlaying) {
-                    console.log('🔄 Recargando playlist por cambio de horario...');
-                    loadCurrentPlaylist().then(() => {
-                        if (!isAudioLoading) {
-                            playLiveSimulation();
-                        }
-                    });
-                }
-            }
-        }, 60000);
-        
-        // Actualizar display cada minuto
-        setInterval(updateDisplayInfo, 60000);
     });
     
-    console.log('✅ Sistema de SIMULACIÓN listo');
+    // Verificar cambios de horario cada minuto
+    setInterval(() => {
+        const oldScheduleName = currentSchedule ? currentSchedule.name : null;
+        currentSchedule = getCurrentSchedule();
+        
+        if (oldScheduleName !== currentSchedule.name) {
+            console.log(`🔄 Cambio de horario detectado: ${oldScheduleName} → ${currentSchedule.name}`);
+            updateDisplayInfo();
+            
+            if (isPlaying) {
+                console.log('🔄 Recargando playlist por cambio de horario...');
+                loadCurrentPlaylist().then(() => {
+                    currentTrackIndex = 0;
+                    playCurrentTrack();
+                });
+            }
+        }
+    }, 60000);
+    
+    console.log('✅ Sistema de radio listo');
 }
-
-// ===== HERRAMIENTAS DE DEBUG (OPCIONAL) =====
-window.debugRadio = {
-    forceSchedule: async function(scheduleName) {
-        console.log(`🧪 SIMULACIÓN DEBUG: Forzando horario ${scheduleName}`);
-        
-        const folders = {
-            'madrugada': 'madrugada/',
-            'mañana': 'mañana/',
-            'tarde': 'tarde/',
-            'mediatarde': 'mediatarde/',
-            'noche': 'noche/',
-            'viernes_20_22': 'especiales/viernes_20_22/',
-            'viernes_22_01': 'especiales/viernes_22_01/',
-            'sabado_20_22': 'especiales/sabado_20_22/',
-            'sabado_22_01': 'especiales/sabado_22_01/'
-        };
-        
-        const folder = folders[scheduleName] || 'tarde/';
-        currentSchedule = {
-            name: scheduleName,
-            folder: folder,
-            displayName: scheduleName,
-            startHour: scheduleName.includes('madrugada') ? 1 : 
-                      scheduleName.includes('mañana') ? 6 :
-                      scheduleName.includes('tarde') ? 12 :
-                      scheduleName.includes('mediatarde') ? 16 : 20
-        };
-        
-        await loadCurrentPlaylist();
-        
-        if (currentShow && !isPlaying) {
-            currentShow.textContent = scheduleName;
-        }
-        
-        console.log(`✅ Horario forzado en simulación: ${scheduleName}`);
-    },
-    
-    playNow: function() {
-        if (playButton) {
-            playButton.click();
-        }
-    },
-    
-    showInfo: function() {
-        console.log('=== SIMULACIÓN DEBUG INFO ===');
-        console.log('Reproduciendo:', isPlaying);
-        console.log('Playlist:', currentPlaylist.length, 'canciones simuladas');
-        console.log('Horario actual:', currentSchedule ? currentSchedule.name : 'N/A');
-    }
-};
 
 // ===== EJECUCIÓN =====
 if (document.readyState === 'loading') {
@@ -536,5 +369,3 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
-
-console.log('📻 Teletext Radio - Sistema de SIMULACIÓN cargado');
