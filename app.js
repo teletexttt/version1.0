@@ -1,6 +1,6 @@
-// === TELEtext Radio - Sistema de Horarios por Carpeta (Basado en versión estable) ===
+// === TELEtext Radio - Sistema de Horarios (Versión Simplificada) ===
 
-// ---- Estado del reproductor (IGUAL QUE TU VERSIÓN) ----
+// ---- Estado del reproductor ----
 let playlist = [];
 let currentIndex = 0;
 let isPlaying = false;
@@ -8,12 +8,11 @@ let audio = document.getElementById('radioPlayer');
 let playlistLoaded = false;
 let isFirstPlay = true;
 
-// ---- Nuevo: Estado para horarios ----
+// ---- Estado para horarios ----
 let currentSchedule = null;
-let scheduleData = null;
 let lastCheckedHour = -1;
 
-// ---- Elementos de la nueva interfaz (version1.0) ----
+// ---- Elementos de la nueva interfaz ----
 const playButton = document.getElementById('radioPlayButton');
 const playPath = document.getElementById('playPath');
 const pausePath1 = document.getElementById('pausePath1');
@@ -22,10 +21,10 @@ const currentShow = document.getElementById('currentShow');
 const currentTimeName = document.getElementById('currentTimeName');
 const currentTimeRange = document.getElementById('currentTimeRange');
 
-// === FUNCIÓN PRINCIPAL: Determinar carpeta según hora (NUEVO) ===
+// === FUNCIÓN: Determinar carpeta según hora ===
 function getCurrentSchedule() {
     const now = new Date();
-    const argentinaOffset = -3 * 60; // UTC-3
+    const argentinaOffset = -3 * 60;
     const localOffset = now.getTimezoneOffset();
     const offsetDiff = argentinaOffset + localOffset;
     const argentinaTime = new Date(now.getTime() + offsetDiff * 60000);
@@ -34,7 +33,7 @@ function getCurrentSchedule() {
     const currentMinute = argentinaTime.getMinutes();
     const currentTime = currentHour * 60 + currentMinute;
     
-    // Si ya verificamos esta hora, no recalcular (optimización)
+    // Si ya verificamos esta hora, no recalcular
     if (currentHour === lastCheckedHour && currentSchedule) {
         return currentSchedule;
     }
@@ -69,22 +68,17 @@ function getCurrentSchedule() {
         }
     }
     
-    // Fallback por si acaso
+    // Fallback
     return schedules[2]; // "tarde"
 }
 
-// === FUNCIÓN PRINCIPAL: Cargar playlist de la carpeta activa (MODIFICADA) ===
+// === FUNCIÓN: Cargar playlist de la carpeta activa ===
 function loadSchedulePlaylist() {
     currentSchedule = getCurrentSchedule();
-    console.log(`📻 Cambio a: ${currentSchedule.displayName} (${currentSchedule.folder})`);
+    console.log(`📻 Carpeta activa: ${currentSchedule.displayName} (${currentSchedule.folder})`);
     
     // Actualizar interfaz
-    if (currentShow) currentShow.textContent = isPlaying ? '🔴 EN VIVO' : currentSchedule.displayName;
-    if (currentTimeName) currentTimeName.textContent = currentSchedule.displayName;
-    if (currentTimeRange) {
-        const format = (h) => `${h % 12 || 12} ${h >= 12 ? 'PM' : 'AM'}`;
-        currentTimeRange.textContent = `${format(currentSchedule.start)} - ${format(currentSchedule.end)}`;
-    }
+    updateDisplayInfo();
     
     // Cargar playlist.json de la carpeta actual
     fetch(currentSchedule.folder + "playlist.json")
@@ -92,11 +86,6 @@ function loadSchedulePlaylist() {
         .then(data => {
             // Formatear rutas completas
             playlist = (data.tracks || []).map(track => {
-                // Si track es un string (nombre de archivo), convertirlo a objeto
-                if (typeof track === 'string') {
-                    return currentSchedule.folder + track;
-                }
-                // Si track es un objeto con propiedad 'file'
                 return currentSchedule.folder + track.file;
             });
             
@@ -110,12 +99,9 @@ function loadSchedulePlaylist() {
             
             playlistLoaded = true;
             shufflePlaylist();
-            loadTrack(0);
             
-            // Si estaba reproduciendo, continuar
-            if (isPlaying && audio.paused) {
-                audio.play().catch(() => playNextTrack());
-            }
+            // Solo cargar la pista, NO reproducir aún
+            loadTrack(0, false);
         })
         .catch(() => {
             // Fallback robusto
@@ -125,11 +111,11 @@ function loadSchedulePlaylist() {
             ];
             playlistLoaded = true;
             shufflePlaylist();
-            loadTrack(0);
+            loadTrack(0, false);
         });
 }
 
-// === TUS FUNCIONES ORIGINALES (PRÁCTICAMENTE INTACTAS) ===
+// === FUNCIONES DE REPRODUCCIÓN (SIMPLIFICADAS) ===
 function shufflePlaylist() {
     for (let i = playlist.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -137,18 +123,19 @@ function shufflePlaylist() {
     }
 }
 
-function loadTrack(index) {
+// Función para cargar una pista (con opción de autoplay)
+function loadTrack(index, autoplay = false) {
     if (!playlistLoaded || index >= playlist.length) return;
     
     currentIndex = index;
     const track = playlist[index];
     
-    // Pausar y cargar nueva pista
+    // Pausar ANTES de cambiar la fuente
     audio.pause();
     audio.src = track;
     audio.volume = 1;
     
-    // Inicio aleatorio solo en primera canción (IGUAL QUE TU VERSIÓN)
+    // Configurar eventos UNA SOLA VEZ al cargar
     audio.onloadedmetadata = () => {
         if (isFirstPlay && audio.duration > 60) {
             audio.currentTime = Math.random() * (audio.duration - 60);
@@ -156,40 +143,56 @@ function loadTrack(index) {
         } else {
             audio.currentTime = 0;
         }
+        
+        // Si se solicitó autoplay, reproducir ahora
+        if (autoplay) {
+            audio.play().then(() => {
+                isPlaying = true;
+                updatePlayButton();
+                if (currentShow) currentShow.textContent = '🔴 EN VIVO';
+            }).catch(e => {
+                console.error("Error al reproducir:", e);
+                // No intentar siguiente canción automáticamente
+            });
+        }
     };
     
-    // Manejo de errores (IGUAL QUE TU VERSIÓN)
-    audio.onended = () => setTimeout(playNextTrack, 500);
+    // Configurar eventos de fin y error
+    audio.onended = () => {
+        setTimeout(() => playNextTrack(), 500);
+    };
+    
     audio.onerror = () => {
-        console.error(`❌ Error cargando: ${track}`);
-        setTimeout(playNextTrack, 2000);
+        console.error(`Error cargando: ${track}`);
+        // Esperar más tiempo antes de intentar siguiente
+        setTimeout(() => playNextTrack(), 4000);
     };
-    
-    // Actualizar botón de play/pause
-    updatePlayButton();
 }
 
+// Función para siguiente pista
 function playNextTrack() {
     if (!playlistLoaded || playlist.length === 0) return;
     
     const nextIndex = (currentIndex + 1) % playlist.length;
-    
-    // Fade out simple (IGUAL QUE TU VERSIÓN)
-    const fadeOut = setInterval(() => {
-        if (audio.volume > 0.1) {
-            audio.volume -= 0.1;
-        } else {
-            clearInterval(fadeOut);
-            loadTrack(nextIndex);
-            audio.play().then(() => {
-                isPlaying = true;
-                updatePlayButton();
-            }).catch(() => playNextTrack());
-        }
-    }, 50);
+    loadTrack(nextIndex, true); // Cargar y reproducir automáticamente
 }
 
-// === FUNCIONES NUEVAS PARA LA INTERFAZ ===
+// === FUNCIONES DE INTERFAZ ===
+function updateDisplayInfo() {
+    if (!currentSchedule) return;
+    
+    const displayName = currentSchedule.displayName;
+    const statusText = isPlaying ? '🔴 EN VIVO' : displayName;
+    
+    if (currentShow) currentShow.textContent = statusText;
+    if (currentTimeName) currentTimeName.textContent = displayName;
+    
+    if (currentTimeRange) {
+        const format = (h) => `${h % 12 || 12} ${h >= 12 ? 'PM' : 'AM'}`;
+        currentTimeRange.textContent = `${format(currentSchedule.start)} - ${format(currentSchedule.end)}`;
+    }
+}
+
 function updatePlayButton() {
     if (!playPath || !pausePath1 || !pausePath2) return;
     
@@ -206,17 +209,26 @@ function updatePlayButton() {
     }
 }
 
+// Control principal de play/pause
 function togglePlay() {
     if (!playlistLoaded) return;
     
     if (!isPlaying || audio.paused) {
-        if (!audio.src) loadTrack(currentIndex);
-        audio.play().then(() => {
-            isPlaying = true;
-            updatePlayButton();
-            if (currentShow) currentShow.textContent = '🔴 EN VIVO';
-        }).catch(() => playNextTrack());
+        // Si no hay pista cargada, cargar la actual
+        if (!audio.src) {
+            loadTrack(currentIndex, true);
+        } else {
+            // Reproducir la pista actual
+            audio.play().then(() => {
+                isPlaying = true;
+                updatePlayButton();
+                if (currentShow) currentShow.textContent = '🔴 EN VIVO';
+            }).catch(e => {
+                console.error("Error al reproducir:", e);
+            });
+        }
     } else {
+        // Pausar
         audio.pause();
         isPlaying = false;
         updatePlayButton();
@@ -226,24 +238,12 @@ function togglePlay() {
 
 // === INICIALIZACIÓN ===
 document.addEventListener('DOMContentLoaded', () => {
-    // Configurar botón de play/pause (nueva interfaz)
+    // Configurar botón de play/pause (ÚNICO control)
     if (playButton) {
         playButton.addEventListener('click', togglePlay);
     }
     
-    // Iniciar con clic en cualquier parte (TU MÉTODO ORIGINAL)
-    document.addEventListener('click', () => {
-        if (!isPlaying && playlistLoaded) {
-            if (!audio.src) loadTrack(currentIndex);
-            audio.play().then(() => {
-                isPlaying = true;
-                updatePlayButton();
-                if (currentShow) currentShow.textContent = '🔴 EN VIVO';
-            });
-        }
-    }, { once: true });
-    
-    // Cargar playlist inicial
+    // Cargar playlist inicial (solo carga, NO reproduce)
     loadSchedulePlaylist();
     
     // Verificar cambio de horario cada minuto
@@ -256,17 +256,9 @@ document.addEventListener('DOMContentLoaded', () => {
             loadSchedulePlaylist();
         }
     }, 60000);
-    
-    // Monitoreo automático (TU MÉTODO ORIGINAL)
-    setInterval(() => {
-        if (isPlaying && audio.paused && !audio.ended) {
-            audio.play().catch(() => playNextTrack());
-        }
-    }, 3000);
 });
 
-// === Compatibilidad con la nueva interfaz ===
-// Esto permite que el botón de compartir funcione si existe
+// === Botón de compartir ===
 const shareButton = document.getElementById('shareRadioButton');
 if (shareButton) {
     shareButton.addEventListener('click', () => {
