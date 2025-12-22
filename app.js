@@ -1,126 +1,136 @@
-// TELEtext RADIO - Sistema Simple y Funcional
+// TELEtext RADIO - Compatible con todos los formatos
 console.log('📻 Radio iniciando...');
 
-// ===== ELEMENTOS DEL DOM =====
 let audio = document.getElementById('radioPlayer');
-let playButton = document.getElementById('radioPlayButton');
-
-// ===== ESTADO =====
 let playlist = [];
 let currentIndex = 0;
 let isPlaying = false;
-let playlistLoaded = false;
 
-// ===== DETERMINAR CARPETA SEGÚN HORA (Versión Simple) =====
-function getFolderByTime() {
+// Determinar carpeta según hora (simple)
+function getCurrentFolder() {
     const now = new Date();
-    const horaArgentina = new Date(now.getTime() - (3 * 60 * 60 * 1000)); // UTC-3
+    const horaArgentina = new Date(now.getTime() - (3 * 60 * 60 * 1000));
     const hora = horaArgentina.getHours();
 
     if (hora >= 1 && hora < 6) return 'music/madrugada/';
     if (hora >= 6 && hora < 12) return 'music/manana/';
     if (hora >= 12 && hora < 16) return 'music/tarde/';
     if (hora >= 16 && hora < 20) return 'music/mediatarde/';
-    return 'music/noche/'; // De 20:00 a 00:59
+    return 'music/noche/';
 }
 
-// ===== CARGAR PLAYLIST =====
+// Cargar playlist COMPATIBLE
 function loadPlaylist() {
-    const folder = getFolderByTime();
-    console.log('🕐 Carpeta activa:', folder);
+    const folder = getCurrentFolder();
+    console.log('📂 Carpeta:', folder);
 
     fetch(folder + 'playlist.json')
         .then(response => response.json())
         .then(data => {
-            // Asegurar que sea un array
-            playlist = Array.isArray(data.tracks) ? data.tracks : [];
-            
-            if (playlist.length === 0) {
-                console.warn('Playlist vacía, usando canción por defecto');
-                playlist = [{ file: 'jazzcartel.mp3' }];
+            // FORMATO 1: El NUEVO { "tracks": [{"file": "nombre.mp3"}] }
+            if (data.tracks && Array.isArray(data.tracks)) {
+                playlist = data.tracks.map(item => {
+                    if (typeof item === 'string') {
+                        // Si es string: "nombre.mp3"
+                        return folder + item;
+                    } else if (item.file) {
+                        // Si es objeto: { "file": "nombre.mp3" }
+                        return folder + item.file;
+                    }
+                    return null;
+                }).filter(Boolean);
+            }
+            // FORMATO 2: El ANTIGUO { "tracks": ["cancion.mp3", ...] }
+            else if (Array.isArray(data.tracks)) {
+                playlist = data.tracks.map(item => folder + item);
+            }
+            // FORMATO 3: Array directo (por si acaso)
+            else if (Array.isArray(data)) {
+                playlist = data.map(item => folder + (item.file || item));
             }
             
-            // Convertir a rutas completas
-            playlist = playlist.map(track => folder + track.file);
-            playlistLoaded = true;
-            console.log('✅ Playlist cargada:', playlist.length, 'temas');
+            // Si sigue vacío, fallback
+            if (playlist.length === 0) {
+                playlist = [folder + 'jazzcartel.mp3'];
+                console.warn('⚠️ Playlist vacía, usando fallback');
+            }
             
-            // Precargar la primera canción
+            console.log('✅ Playlist cargada:', playlist.length, 'temas');
             loadCurrentTrack();
         })
         .catch(() => {
-            console.error('Error cargando playlist, usando respaldo');
+            console.error('❌ Error cargando JSON, usando emergencia');
             playlist = [folder + 'jazzcartel.mp3'];
-            playlistLoaded = true;
             loadCurrentTrack();
         });
 }
 
-// ===== CARGA UNA CANCIÓN (Sistema Sólido) =====
+// Cargar canción (robusto)
 function loadCurrentTrack() {
-    if (!playlistLoaded || currentIndex >= playlist.length) return;
+    if (playlist.length === 0 || currentIndex >= playlist.length) return;
     
     const track = playlist[currentIndex];
     console.log('🎵 Cargando:', track);
     
-    // PAUSAR antes de cambiar
+    // Pausar y limpiar
     audio.pause();
     
-    // Limpiar eventos anteriores (IMPORTANTE)
-    audio.onerror = null;
-    audio.onloadeddata = null;
+    // Crear NUEVO elemento de audio (evita errores)
+    const newAudio = new Audio();
+    newAudio.src = track;
+    newAudio.volume = 0.8;
     
-    // Asignar nueva fuente
-    audio.src = track;
-    audio.volume = 0.8;
-    
-    // Configurar eventos NUEVOS
-    audio.onloadeddata = function() {
-        console.log('✅ Audio listo para reproducir');
-        // Si estaba reproduciendo, reanudar
+    newAudio.oncanplay = () => {
+        console.log('✅ Audio listo');
+        // Reemplazar el elemento viejo
+        if (audio.parentNode) {
+            audio.parentNode.replaceChild(newAudio, audio);
+        }
+        audio = newAudio;
+        audio.id = 'radioPlayer';
+        
+        // Configurar eventos
+        audio.onended = () => {
+            console.log('⏭️ Siguiente');
+            currentIndex = (currentIndex + 1) % playlist.length;
+            setTimeout(() => loadCurrentTrack(), 500);
+        };
+        
+        audio.onerror = () => {
+            console.error('❌ Error en audio');
+            currentIndex = (currentIndex + 1) % playlist.length;
+            setTimeout(() => loadCurrentTrack(), 2000);
+        };
+        
+        // Reproducir si estaba en play
         if (isPlaying) {
-            audio.play().catch(e => {
-                console.error('Error al reanudar:', e);
-                isPlaying = false;
-            });
+            audio.play().catch(e => console.log('Error play:', e));
         }
     };
     
-    audio.onerror = function() {
-        console.error('❌ Error cargando el audio. Probando siguiente...');
-        setTimeout(() => {
-            currentIndex = (currentIndex + 1) % playlist.length;
-            loadCurrentTrack();
-        }, 2000);
-    };
-    
-    audio.onended = function() {
-        console.log('⏭️ Canción terminada');
+    newAudio.onerror = () => {
+        console.error('❌ No se pudo cargar');
         currentIndex = (currentIndex + 1) % playlist.length;
-        setTimeout(() => loadCurrentTrack(), 500);
+        setTimeout(() => loadCurrentTrack(), 1000);
     };
 }
 
-// ===== CONTROL PLAY/PAUSE (Simple) =====
+// Control play/pause
 function togglePlay() {
-    if (!playlistLoaded) {
+    if (playlist.length === 0) {
         loadPlaylist();
         return;
     }
     
     if (!isPlaying) {
-        // Si no hay canción cargada, cargar la actual
-        if (!audio.src) {
-            loadCurrentTrack();
-        }
+        if (!audio.src) loadCurrentTrack();
         
         audio.play().then(() => {
             isPlaying = true;
             console.log('▶️ Reproduciendo');
-            updatePlayButton();
         }).catch(e => {
-            console.error('Error al iniciar reproducción:', e);
-            // Intentar siguiente canción
+            console.error('Error:', e);
+            // Intentar siguiente
             currentIndex = (currentIndex + 1) % playlist.length;
             loadCurrentTrack();
         });
@@ -128,55 +138,22 @@ function togglePlay() {
         audio.pause();
         isPlaying = false;
         console.log('⏸️ Pausado');
-        updatePlayButton();
     }
 }
 
-// ===== ACTUALIZAR BOTÓN (Si existe) =====
-function updatePlayButton() {
-    if (!playButton) return;
+// Iniciar
+document.addEventListener('DOMContentLoaded', () => {
+    // Botón de play
+    const playBtn = document.getElementById('radioPlayButton');
+    if (playBtn) playBtn.addEventListener('click', togglePlay);
     
-    const playIcon = playButton.querySelector('#playPath');
-    const pauseIcon1 = playButton.querySelector('#pausePath1');
-    const pauseIcon2 = playButton.querySelector('#pausePath2');
-    
-    if (!playIcon || !pauseIcon1 || !pauseIcon2) return;
-    
-    if (isPlaying) {
-        playIcon.style.opacity = '0';
-        pauseIcon1.style.opacity = '1';
-        pauseIcon2.style.opacity = '1';
-    } else {
-        playIcon.style.opacity = '1';
-        pauseIcon1.style.opacity = '0';
-        pauseIcon2.style.opacity = '0';
-    }
-}
-
-// ===== INICIAR =====
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('✅ DOM listo');
-    
-    // Configurar botón
-    if (playButton) {
-        playButton.addEventListener('click', togglePlay);
-    }
-    
-    // Iniciar con clic en cualquier parte (como tu versión original)
-    document.addEventListener('click', function initClick() {
-        if (!playlistLoaded) {
+    // Clic en cualquier parte (tu método)
+    document.addEventListener('click', () => {
+        if (!isPlaying && playlist.length === 0) {
             loadPlaylist();
         }
-        document.removeEventListener('click', initClick);
     }, { once: true });
     
     // Cargar playlist inicial
     loadPlaylist();
-    
-    // Verificar cambio de horario cada minuto
-    setInterval(() => {
-        const oldFolder = getFolderByTime();
-        // La función loadPlaylist ya usa getFolderByTime(), 
-        // así que se actualizará automáticamente si cambia la hora
-    }, 60000);
 });
